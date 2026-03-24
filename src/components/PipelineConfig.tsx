@@ -15,8 +15,8 @@ interface AvailableModels {
 
 interface Config {
   visionModels: string[];
-  codegenModel: string;
-  imagegenModel: string;
+  codegenModels: string[];
+  imagegenModels: string[];
 }
 
 interface Props {
@@ -31,81 +31,71 @@ function StatusDot({ available }: { available: boolean }) {
   );
 }
 
+function ModelCheckboxGroup({
+  title,
+  models,
+  selected,
+  onToggle,
+}: {
+  title: string;
+  models: ModelInfo[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">{title}</h3>
+      <div className="space-y-2">
+        {models.map(m => (
+          <label key={m.id} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-800 ${!m.available ? 'opacity-50' : ''}`}>
+            <input
+              type="checkbox"
+              checked={selected.includes(m.id)}
+              onChange={() => onToggle(m.id)}
+              disabled={!m.available}
+              className="accent-blue-500"
+            />
+            <StatusDot available={m.available} />
+            <span className="text-sm">{m.name}</span>
+            <span className="text-xs text-gray-500">{m.provider}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PipelineConfig({ config, onChange, availableModels }: Props) {
   if (!availableModels) {
     return <div className="bg-gray-900 rounded-xl p-6 animate-pulse h-48" />;
   }
 
-  const toggleVision = (id: string) => {
-    const models = config.visionModels.includes(id)
-      ? config.visionModels.filter(m => m !== id)
-      : [...config.visionModels, id];
-    onChange({ ...config, visionModels: models });
+  const toggle = (field: 'visionModels' | 'codegenModels' | 'imagegenModels', id: string) => {
+    const current = config[field];
+    const updated = current.includes(id) ? current.filter(m => m !== id) : [...current, id];
+    onChange({ ...config, [field]: updated });
   };
 
   return (
     <div className="bg-gray-900 rounded-xl p-6 space-y-6">
-      <div>
-        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">Vision Models</h3>
-        <div className="space-y-2">
-          {availableModels.vision.map(m => (
-            <label key={m.id} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-800 ${!m.available ? 'opacity-50' : ''}`}>
-              <input
-                type="checkbox"
-                checked={config.visionModels.includes(m.id)}
-                onChange={() => toggleVision(m.id)}
-                disabled={!m.available}
-                className="accent-blue-500"
-              />
-              <StatusDot available={m.available} />
-              <span className="text-sm">{m.name}</span>
-              <span className="text-xs text-gray-500">{m.provider}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">Code Generation</h3>
-        <div className="space-y-2">
-          {availableModels.codegen.map(m => (
-            <label key={m.id} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-800 ${!m.available ? 'opacity-50' : ''}`}>
-              <input
-                type="radio"
-                name="codegen"
-                checked={config.codegenModel === m.id}
-                onChange={() => onChange({ ...config, codegenModel: m.id })}
-                disabled={!m.available}
-                className="accent-blue-500"
-              />
-              <StatusDot available={m.available} />
-              <span className="text-sm">{m.name}</span>
-              <span className="text-xs text-gray-500">{m.provider}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">Image Generation</h3>
-        <div className="space-y-2">
-          {availableModels.imagegen.map(m => (
-            <label key={m.id} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-800 ${!m.available ? 'opacity-50' : ''}`}>
-              <input
-                type="radio"
-                name="imagegen"
-                checked={config.imagegenModel === m.id}
-                onChange={() => onChange({ ...config, imagegenModel: m.id })}
-                disabled={!m.available}
-                className="accent-blue-500"
-              />
-              <StatusDot available={m.available} />
-              <span className="text-sm">{m.name}</span>
-              <span className="text-xs text-gray-500">{m.provider}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+      <ModelCheckboxGroup
+        title="Vision Models"
+        models={availableModels.vision}
+        selected={config.visionModels}
+        onToggle={(id) => toggle('visionModels', id)}
+      />
+      <ModelCheckboxGroup
+        title="Code Generation"
+        models={availableModels.codegen}
+        selected={config.codegenModels}
+        onToggle={(id) => toggle('codegenModels', id)}
+      />
+      <ModelCheckboxGroup
+        title="Image Generation"
+        models={availableModels.imagegen}
+        selected={config.imagegenModels}
+        onToggle={(id) => toggle('imagegenModels', id)}
+      />
     </div>
   );
 }
