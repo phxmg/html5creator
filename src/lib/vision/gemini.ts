@@ -156,7 +156,7 @@ export const geminiAdapter: VisionModel = {
   name: 'Gemini 2.5 Pro',
   provider: 'google',
   async analyze(imageBase64: string, mimeType: string, systemPrompt: string, userPrompt: string): Promise<AdAnalysis> {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-pro',

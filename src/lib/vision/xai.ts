@@ -3,8 +3,8 @@ import { VisionModel, AdAnalysis } from '../types';
 import { parseJsonResponse } from './utils';
 
 export const grokAdapter: VisionModel = {
-  id: 'grok-3',
-  name: 'Grok 3',
+  id: 'grok-2-vision',
+  name: 'Grok 2 Vision',
   provider: 'xai',
   async analyze(imageBase64: string, mimeType: string, systemPrompt: string, userPrompt: string): Promise<AdAnalysis> {
     const client = new OpenAI({
@@ -13,7 +13,7 @@ export const grokAdapter: VisionModel = {
     });
 
     const response = await client.chat.completions.create({
-      model: 'grok-3',
+      model: 'grok-2-vision-1212',
       messages: [
         { role: 'system', content: systemPrompt },
         {

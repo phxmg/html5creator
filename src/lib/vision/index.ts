@@ -11,7 +11,7 @@ export const visionRegistry: Record<string, VisionModel> = {
   'claude-sonnet-4-20250514': sonnetAdapter,
   'claude-opus-4-6': opusAdapter,
   'gemini-2.5-pro': geminiAdapter,
-  'grok-3': grokAdapter,
+  'grok-2-vision': grokAdapter,
 };
 
 const API_KEY_MAP: Record<string, string> = {
@@ -19,7 +19,7 @@ const API_KEY_MAP: Record<string, string> = {
   'claude-sonnet-4-20250514': 'ANTHROPIC_API_KEY',
   'claude-opus-4-6': 'ANTHROPIC_API_KEY',
   'gemini-2.5-pro': 'GEMINI_API_KEY',
-  'grok-3': 'XAI_API_KEY',
+  'grok-2-vision': 'XAI_API_KEY',
 };
 
 export function getAvailableModels(): VisionModel[] {
