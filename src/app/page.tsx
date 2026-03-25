@@ -175,7 +175,6 @@ export default function Home() {
               const event = JSON.parse(line.slice(6));
               if (event.type === 'generation_complete') {
                 setGenerations(prev => ({ ...prev, [key]: { status: 'complete', html: event.data.html, duration: event.duration } }));
-                if (!selectedGeneration) setSelectedGeneration(key);
               } else if (event.type === 'generation_error') {
                 setGenerations(prev => ({ ...prev, [key]: { status: 'error', error: event.error, duration: event.duration } }));
               }
@@ -294,7 +293,7 @@ export default function Home() {
             {phase === 'upload' && 'Upload an ad image to begin'}
             {phase === 'analyzing' && 'Analyzing with AI vision models...'}
             {phase === 'results' && 'Analysis complete — generate HTML5 from results'}
-            {phase === 'generating' && `Generating ${Object.values(generations).filter(g => g.status === 'running').length} HTML5 ads...`}
+            {phase === 'generating' && `Generating HTML5 ads — ${Object.values(generations).filter(g => g.status === 'complete').length}/${Object.keys(generations).length} complete`}
             {phase === 'comparison' && `${Object.values(generations).filter(g => g.status === 'complete').length} HTML5 ads generated — compare results`}
           </span>
         </div>
@@ -479,146 +478,124 @@ export default function Home() {
           </div>
         )}
 
-        {/* Generating Phase */}
-        {phase === 'generating' && (
-          <div className="space-y-6">
-            <div className="flex gap-6">
-              <div className="flex-shrink-0 w-80">
-                {imagePreview && <img src={imagePreview} alt="Original ad" className="w-full rounded-lg border border-gray-700" />}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-400 mb-3">Generation Progress</p>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {Object.entries(generations).map(([key, gen]) => {
-                    const parts = key.split('__');
-                    return (
-                      <div key={key} className={`rounded-lg border p-3 text-sm ${
-                        gen.status === 'complete' ? 'border-green-600 bg-gray-900'
-                        : gen.status === 'error' ? 'border-red-600 bg-gray-900'
-                        : 'border-blue-500 bg-gray-900 animate-pulse'
-                      }`}>
-                        <div className="flex justify-between items-center">
-                          <span className="text-white font-medium truncate">
-                            {parts.map(p => modelNameMap[p] || p).join(' → ')}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            gen.status === 'complete' ? 'bg-green-900 text-green-300' :
-                            gen.status === 'error' ? 'bg-red-900 text-red-300' :
-                            'bg-blue-900 text-blue-300'
-                          }`}>{gen.status}</span>
-                        </div>
-                        {gen.duration != null && <p className="text-xs text-gray-500 mt-1">{(gen.duration / 1000).toFixed(1)}s</p>}
-                        {gen.status === 'error' && <p className="text-xs text-red-400 mt-1 truncate">{gen.error}</p>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Generating / Comparison Phase — Grid View */}
+        {(phase === 'generating' || phase === 'comparison') && (() => {
+          // Get ad dimensions from first completed analysis
+          const firstAnalysis = Object.values(analyses).find(a => a.status === 'complete' && a.result);
+          const adWidth = firstAnalysis?.result?.canvas?.width || 300;
+          const adHeight = firstAnalysis?.result?.canvas?.height || 250;
+          const hasCompleted = Object.values(generations).some(g => g.status === 'complete' && g.html);
 
-        {/* Comparison Phase */}
-        {phase === 'comparison' && (
-          <div className="space-y-4">
-            <div className="flex gap-2 flex-wrap">
-              {Object.entries(generations).map(([key, gen]) => (
-                <button
-                  key={key}
-                  onClick={() => setSelectedGeneration(key)}
-                  className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                    selectedGeneration === key ? 'bg-blue-600 text-white'
-                    : gen.status === 'complete' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : gen.status === 'error' ? 'bg-red-900/50 text-red-300'
-                    : 'bg-gray-800 text-gray-500'
-                  }`}
-                >
-                  {key.split('__').map(k => modelNameMap[k] || k).join(' → ')}
-                  {gen.status === 'complete' && gen.duration && ` (${(gen.duration / 1000).toFixed(1)}s)`}
-                  {gen.status === 'error' && ' ✗'}
+          return (
+            <div className="space-y-4">
+              {/* Action bar */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <button onClick={() => setPhase('results')} className="text-xs px-3 py-1.5 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700">
+                  + Generate More
                 </button>
-              ))}
-              <button onClick={() => setPhase('results')} className="text-xs px-3 py-1.5 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700">
-                + Generate More
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-sm text-gray-400 mb-2">Original Image</p>
-                <div className="rounded-lg border border-gray-700 overflow-hidden bg-white">
-                  {imagePreview && <img src={imagePreview} alt="Original ad" className="w-full" />}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-gray-400 mb-2">Generated HTML5</p>
-                {selectedGeneration && generations[selectedGeneration]?.status === 'complete' && generations[selectedGeneration]?.html && (
-                  <div className="rounded-lg border border-gray-700 overflow-hidden">
-                    <HtmlPreview html={generations[selectedGeneration].html!} />
-                  </div>
-                )}
-                {selectedGeneration && generations[selectedGeneration]?.status === 'error' && (
-                  <div className="rounded-lg border border-red-700 p-4 bg-gray-900">
-                    <p className="text-red-400">{generations[selectedGeneration].error}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {selectedGeneration && generations[selectedGeneration]?.html && (
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    const blob = new Blob([generations[selectedGeneration!].html!], { type: 'text/html' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `ad-${runId}-${selectedGeneration}.html`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-md text-sm font-medium transition-colors"
-                >
-                  Download HTML
-                </button>
-                <button
-                  onClick={() => {
-                    const w = window.open('', '_blank');
-                    if (w) { w.document.write(generations[selectedGeneration!].html!); w.document.close(); }
-                  }}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md text-sm font-medium transition-colors"
-                >
-                  Open in New Tab
-                </button>
-                <button
-                  onClick={async () => {
-                    const zip = new JSZip();
-                    // Add original image
-                    if (imageFile) {
-                      zip.file(`original-${imageFile.name}`, imageFile);
-                    }
-                    // Add all generated HTML files
-                    for (const [key, gen] of Object.entries(generations)) {
-                      if (gen.status === 'complete' && gen.html) {
-                        zip.file(`${key}.html`, gen.html);
+                {hasCompleted && (
+                  <button
+                    onClick={async () => {
+                      const zip = new JSZip();
+                      if (imageFile) zip.file(`original-${imageFile.name}`, imageFile);
+                      for (const [key, gen] of Object.entries(generations)) {
+                        if (gen.status === 'complete' && gen.html) zip.file(`${key}.html`, gen.html);
                       }
-                    }
-                    const blob = await zip.generateAsync({ type: 'blob' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `adgen-${runId}.zip`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-md text-sm font-medium transition-colors"
-                >
-                  Download All as ZIP
-                </button>
+                      const blob = await zip.generateAsync({ type: 'blob' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `adgen-${runId}.zip`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-500 text-white font-medium transition-colors"
+                  >
+                    Download All as ZIP
+                  </button>
+                )}
+                <span className="text-xs text-gray-500 ml-auto">
+                  {adWidth}x{adHeight} &middot; {Object.values(generations).filter(g => g.status === 'complete').length}/{Object.keys(generations).length} complete
+                </span>
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Grid: original + all generations */}
+              <div className="flex flex-wrap gap-4">
+                {/* Original image at actual size */}
+                <div className="flex-shrink-0">
+                  <div className="border border-gray-500 overflow-hidden bg-white" style={{ width: adWidth, height: adHeight }}>
+                    {imagePreview && <img src={imagePreview} alt="Original ad" style={{ width: adWidth, height: adHeight, objectFit: 'contain' }} />}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5 text-center">Original</p>
+                </div>
+
+                {/* Generated results */}
+                {Object.entries(generations).map(([key, gen]) => {
+                  const parts = key.split('__');
+                  const label = parts.map(p => modelNameMap[p] || p.split('/').pop() || p).join(' > ');
+                  return (
+                    <div key={key} className="flex-shrink-0 group relative">
+                      <div className={`overflow-hidden transition-all ${
+                        gen.status === 'complete' ? 'border-2 border-green-600'
+                        : gen.status === 'error' ? 'border-2 border-red-600'
+                        : 'border-2 border-blue-500 animate-pulse'
+                      }`} style={{ width: adWidth, height: adHeight }}>
+                        {gen.status === 'complete' && gen.html ? (
+                          <HtmlPreview html={gen.html} width={adWidth} height={adHeight} />
+                        ) : gen.status === 'error' ? (
+                          <div className="w-full h-full bg-gray-900 flex items-center justify-center p-3">
+                            <p className="text-xs text-red-400 text-center break-all">{gen.error}</p>
+                          </div>
+                        ) : (
+                          <div className="w-full h-full bg-gray-900 flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="inline-block w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-2" />
+                              <p className="text-xs text-blue-400">Generating...</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1.5 truncate text-center" style={{ maxWidth: adWidth }}>
+                        {label}
+                        {gen.duration != null && ` (${(gen.duration / 1000).toFixed(1)}s)`}
+                      </p>
+                      {/* Hover actions */}
+                      {gen.status === 'complete' && gen.html && (
+                        <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
+                          <button
+                            onClick={() => {
+                              const blob = new Blob([gen.html!], { type: 'text/html' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `ad-${runId}-${key}.html`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                            className="px-1.5 py-0.5 bg-green-600 hover:bg-green-500 text-white rounded text-[10px] font-medium shadow"
+                            title="Download HTML"
+                          >
+                            DL
+                          </button>
+                          <button
+                            onClick={() => {
+                              const w = window.open('', '_blank');
+                              if (w) { w.document.write(gen.html!); w.document.close(); }
+                            }}
+                            className="px-1.5 py-0.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-[10px] font-medium shadow"
+                            title="Open in New Tab"
+                          >
+                            Tab
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

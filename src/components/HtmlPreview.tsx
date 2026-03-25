@@ -8,14 +8,13 @@ interface Props {
 
 export default function HtmlPreview({ html, width = 300, height = 250 }: Props) {
   return (
-    <div className="inline-block border border-gray-700 rounded-lg overflow-hidden shadow-lg bg-white">
+    <div className="inline-block border border-gray-600 overflow-hidden bg-white" style={{ width, height }}>
       <iframe
         srcDoc={html}
-        width={width}
-        height={height}
         sandbox="allow-scripts"
+        scrolling="no"
         className="block"
-        style={{ width, height }}
+        style={{ width, height, overflow: 'hidden', border: 'none' }}
       />
     </div>
   );

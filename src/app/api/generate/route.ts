@@ -64,8 +64,8 @@ export async function POST(request: Request) {
               imageRegions.map(r => ({
                 id: r.id,
                 prompt: r.generationPrompt,
-                width: Math.max(512, Math.min(1024, Math.round((r.bounds.w / 100) * analysis.canvas.width))),
-                height: Math.max(512, Math.min(1024, Math.round((r.bounds.h / 100) * analysis.canvas.height))),
+                width: Math.max(512, Math.min(1024, r.bounds.w)),
+                height: Math.max(512, Math.min(1024, r.bounds.h)),
               })),
               imagegenModelId
             );
