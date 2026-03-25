@@ -18,23 +18,36 @@ function createOpenAIAdapter(modelId: string, id: string, name: string): CodeGen
     ): Promise<string> {
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+      const hasImages = Object.keys(imageDataUris).length > 0;
+      const imageInstruction = hasImages
+        ? `\n\nFor image regions, use these exact img src values:\n${
+            Object.entries(imageDataUris).map(([regionId]) =>
+              `- Region "${regionId}": src="__IMG_${regionId}__"`
+            ).join('\n')
+          }\nI will replace the placeholders with actual data URIs after generation.`
+        : '';
+
       const fullUserPrompt = userPrompt
         .replace('{analysisJson}', JSON.stringify(analysis, null, 2))
-        .replace('{imageMapping}', Object.entries(imageDataUris)
-          .map(([regionId, dataUri]) => `Region "${regionId}":\n${dataUri}`)
-          .join('\n\n'));
+        .replace('{imageMapping}', imageInstruction);
 
       const response = await client.chat.completions.create({
         model: modelId,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: fullUserPrompt },
+          { role: 'user', content: fullUserPrompt + imageInstruction },
         ],
         max_tokens: 16384,
       });
 
-      const text = response.choices[0]?.message?.content || '';
-      return stripCodeFences(text);
+      let html = response.choices[0]?.message?.content || '';
+      html = stripCodeFences(html);
+
+      for (const [regionId, dataUri] of Object.entries(imageDataUris)) {
+        html = html.replaceAll(`__IMG_${regionId}__`, dataUri);
+      }
+
+      return html;
     },
   };
 }

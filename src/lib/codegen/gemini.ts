@@ -24,14 +24,27 @@ export const geminiCodegenAdapter: CodeGenModel = {
       systemInstruction: systemPrompt,
     });
 
+    const hasImages = Object.keys(imageDataUris).length > 0;
+    const imageInstruction = hasImages
+      ? `\n\nFor image regions, use these exact img src values:\n${
+          Object.entries(imageDataUris).map(([regionId]) =>
+            `- Region "${regionId}": src="__IMG_${regionId}__"`
+          ).join('\n')
+        }\nI will replace the placeholders with actual data URIs after generation.`
+      : '';
+
     const fullUserPrompt = userPrompt
       .replace('{analysisJson}', JSON.stringify(analysis, null, 2))
-      .replace('{imageMapping}', Object.entries(imageDataUris)
-        .map(([regionId, dataUri]) => `Region "${regionId}":\n${dataUri}`)
-        .join('\n\n'));
+      .replace('{imageMapping}', imageInstruction);
 
-    const result = await model.generateContent(fullUserPrompt);
-    const text = result.response.text();
-    return stripCodeFences(text);
+    const result = await model.generateContent(fullUserPrompt + imageInstruction);
+    let html = result.response.text();
+    html = stripCodeFences(html);
+
+    for (const [regionId, dataUri] of Object.entries(imageDataUris)) {
+      html = html.replaceAll(`__IMG_${regionId}__`, dataUri);
+    }
+
+    return html;
   },
 };
