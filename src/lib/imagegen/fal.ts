@@ -26,32 +26,35 @@ function createFalAdapter(modelId: string, id: string, name: string): ImageGenMo
         },
         body: JSON.stringify({
           prompt,
-          image_size: { width, height },
+          image_size: { width: Math.min(width, 1024), height: Math.min(height, 1024) },
         }),
       });
       if (!submitRes.ok) throw new Error(`FAL submit failed: ${submitRes.status} ${await submitRes.text()}`);
-      const { request_id } = await submitRes.json();
+      const submitData = await submitRes.json();
+      const requestId = submitData.request_id;
+
+      // Use the URLs from the response (they have the correct path)
+      const statusUrl = submitData.status_url || `https://queue.fal.run/${modelId}/requests/${requestId}/status`;
+      const responseUrl = submitData.response_url || `https://queue.fal.run/${modelId}/requests/${requestId}`;
 
       // Poll for completion
-      const deadline = Date.now() + 60000;
+      const deadline = Date.now() + 90000;
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 2000));
-        const statusRes = await fetch(
-          `https://queue.fal.run/${modelId}/requests/${request_id}/status`,
-          { headers: { Authorization: `Key ${apiKey}` } }
-        );
+        const statusRes = await fetch(statusUrl, {
+          headers: { Authorization: `Key ${apiKey}` },
+        });
         if (!statusRes.ok) continue;
         const status = await statusRes.json();
         if (status.status === 'COMPLETED') break;
         if (status.status === 'FAILED') throw new Error(`FAL generation failed: ${JSON.stringify(status)}`);
       }
 
-      // Get result
-      const resultRes = await fetch(
-        `https://queue.fal.run/${modelId}/requests/${request_id}`,
-        { headers: { Authorization: `Key ${apiKey}` } }
-      );
-      if (!resultRes.ok) throw new Error(`FAL result fetch failed: ${resultRes.status}`);
+      // Get result using the response URL from submit
+      const resultRes = await fetch(responseUrl, {
+        headers: { Authorization: `Key ${apiKey}` },
+      });
+      if (!resultRes.ok) throw new Error(`FAL result fetch failed: ${resultRes.status} ${await resultRes.text()}`);
       const result = await resultRes.json();
       const imageUrl = result.images?.[0]?.url;
       if (!imageUrl) throw new Error('No image URL in FAL response');

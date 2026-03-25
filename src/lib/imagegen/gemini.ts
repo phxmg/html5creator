@@ -8,53 +8,27 @@ export const geminiImageGenAdapter: ImageGenModel = {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
-    // Try Imagen 4 Fast endpoint first
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:generateImages?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt,
-            config: { numberOfImages: 1 },
-          }),
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const b64 = data.generatedImages?.[0]?.image?.imageBytes;
-        if (b64) return `data:image/png;base64,${b64}`;
-      }
-    } catch {
-      // Fall through to Gemini Flash fallback
-    }
-
-    // Fallback: Gemini 2.5 Flash with image generation
+    // Use the :predict endpoint for Imagen 4 Fast
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
-          generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT'],
-          },
+          instances: [{ prompt }],
+          parameters: { sampleCount: 1 },
         }),
       }
     );
-    if (!res.ok) throw new Error(`Gemini image gen failed: ${res.status} ${await res.text()}`);
-    const data = await res.json();
-    const parts = data.candidates?.[0]?.content?.parts;
-    if (parts) {
-      for (const part of parts) {
-        if (part.inlineData?.data) {
-          const mime = part.inlineData.mimeType || 'image/png';
-          return `data:${mime};base64,${part.inlineData.data}`;
-        }
-      }
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Imagen 4 Fast failed: ${res.status} ${errText.substring(0, 200)}`);
     }
-    throw new Error('No image data in Gemini response');
+
+    const data = await res.json();
+    const b64 = data.predictions?.[0]?.bytesBase64Encoded;
+    if (!b64) throw new Error('No image data in Imagen response');
+    return `data:image/png;base64,${b64}`;
   },
 };

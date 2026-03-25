@@ -24,6 +24,32 @@ export function getAvailableImageGenModels(): ImageGenModel[] {
   return available;
 }
 
+async function generateWithRetry(
+  model: ImageGenModel,
+  prompt: string,
+  width: number,
+  height: number,
+  maxRetries: number = 10,
+  delayMs: number = 10000
+): Promise<string> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await model.generate(prompt, width, height);
+    } catch (err: any) {
+      lastError = err;
+      const isRateLimit = err.message?.includes('429') || err.message?.includes('rate') || err.message?.includes('throttl');
+      if (isRateLimit && attempt < maxRetries) {
+        console.log(`[imagegen] Rate limited on attempt ${attempt + 1}, retrying in ${delayMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError || new Error('Image generation failed after retries');
+}
+
 export async function generateImages(
   regions: Array<{ id: string; prompt: string; width: number; height: number }>,
   modelId: string
@@ -31,21 +57,11 @@ export async function generateImages(
   const model = imageGenModels[modelId];
   if (!model) throw new Error(`Unknown image gen model: ${modelId}`);
 
-  const results = await Promise.all(
-    regions.map(async (region) => {
-      try {
-        const dataUri = await model.generate(region.prompt, region.width, region.height);
-        return { id: region.id, dataUri };
-      } catch (error) {
-        console.error(`Image generation failed for region ${region.id}:`, error);
-        throw error;
-      }
-    })
-  );
-
+  // Generate images sequentially to avoid rate limits
   const map: Record<string, string> = {};
-  for (const r of results) {
-    map[r.id] = r.dataUri;
+  for (const region of regions) {
+    const dataUri = await generateWithRetry(model, region.prompt, region.width, region.height);
+    map[region.id] = dataUri;
   }
   return map;
 }

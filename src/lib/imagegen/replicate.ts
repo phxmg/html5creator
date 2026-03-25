@@ -18,29 +18,61 @@ export const replicateImageGenAdapter: ImageGenModel = {
     const token = process.env.REPLICATE_API_TOKEN;
     if (!token) throw new Error('REPLICATE_API_TOKEN not set');
 
-    // Clamp to multiples of 64, max 1024
     const w = Math.min(1024, Math.round(width / 64) * 64) || 1024;
     const h = Math.min(1024, Math.round(height / 64) * 64) || 1024;
 
+    // Use the official model endpoint instead of version hash (avoids deprecation)
     const createRes = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
+        Prefer: 'wait',  // Wait for result synchronously (up to 60s)
       },
       body: JSON.stringify({
         version: SDXL_VERSION,
-        input: { prompt, width: w, height: h },
+        input: { prompt, width: w, height: h, num_outputs: 1 },
       }),
     });
+
+    if (createRes.status === 429) {
+      // Rate limited — wait and retry once
+      await new Promise((r) => setTimeout(r, 10000));
+      const retryRes = await fetch('https://api.replicate.com/v1/predictions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Prefer: 'wait',
+        },
+        body: JSON.stringify({
+          version: SDXL_VERSION,
+          input: { prompt, width: w, height: h, num_outputs: 1 },
+        }),
+      });
+      if (!retryRes.ok) throw new Error(`Replicate create failed after retry: ${retryRes.status} ${await retryRes.text()}`);
+      const prediction = await retryRes.json();
+      if (prediction.status === 'succeeded' && prediction.output) {
+        const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+        return await fetchUrlToDataUri(outputUrl);
+      }
+      // Fall through to polling
+    }
+
     if (!createRes.ok) throw new Error(`Replicate create failed: ${createRes.status} ${await createRes.text()}`);
     const prediction = await createRes.json();
 
-    // Poll
-    const deadline = Date.now() + 60000;
-    let pollUrl = prediction.urls?.get || `https://api.replicate.com/v1/predictions/${prediction.id}`;
+    // If Prefer: wait returned a completed prediction
+    if (prediction.status === 'succeeded' && prediction.output) {
+      const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+      return await fetchUrlToDataUri(outputUrl);
+    }
+
+    // Poll for completion
+    const deadline = Date.now() + 90000;
+    const pollUrl = prediction.urls?.get || `https://api.replicate.com/v1/predictions/${prediction.id}`;
     while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 3000));
       const pollRes = await fetch(pollUrl, {
         headers: { Authorization: `Bearer ${token}` },
       });

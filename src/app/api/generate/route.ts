@@ -42,6 +42,17 @@ export async function POST(request: Request) {
         try {
           send({ type: 'generation_start', modelId: codegenModelId });
 
+          const outputDir = path.join(process.cwd(), 'public', 'outputs', runId);
+          await mkdir(outputDir, { recursive: true });
+          const imagesDir = path.join(outputDir, 'images');
+          await mkdir(imagesDir, { recursive: true });
+
+          // Save the analysis and prompts for this run
+          await writeFile(
+            path.join(outputDir, `analysis-${analysisModelId}.json`),
+            JSON.stringify(analysis, null, 2)
+          );
+
           // Generate images for all imageRegions
           const imageRegions = analysis.imageRegions || [];
           const imageDataUris: Record<string, string> = {};
@@ -53,14 +64,33 @@ export async function POST(request: Request) {
               imageRegions.map(r => ({
                 id: r.id,
                 prompt: r.generationPrompt,
-                width: Math.round((r.bounds.w / 100) * analysis.canvas.width),
-                height: Math.round((r.bounds.h / 100) * analysis.canvas.height),
+                width: Math.max(512, Math.min(1024, Math.round((r.bounds.w / 100) * analysis.canvas.width))),
+                height: Math.max(512, Math.min(1024, Math.round((r.bounds.h / 100) * analysis.canvas.height))),
               })),
               imagegenModelId
             );
 
             for (const [id, dataUri] of Object.entries(imageResults)) {
               imageDataUris[id] = dataUri;
+
+              // Save generated image to disk
+              const base64Data = dataUri.split(',')[1];
+              const ext = dataUri.startsWith('data:image/png') ? 'png' : 'jpg';
+              if (base64Data) {
+                await writeFile(
+                  path.join(imagesDir, `${id}-${imagegenModelId}.${ext}`),
+                  Buffer.from(base64Data, 'base64')
+                );
+              }
+
+              // Save the prompt used
+              const region = imageRegions.find(r => r.id === id);
+              if (region) {
+                await writeFile(
+                  path.join(imagesDir, `${id}-${imagegenModelId}-prompt.txt`),
+                  region.generationPrompt
+                );
+              }
             }
 
             send({ type: 'generation_start', modelId: imagegenModelId, data: { step: 'images_complete', count: Object.keys(imageDataUris).length } } as any);
@@ -82,11 +112,15 @@ export async function POST(request: Request) {
           const html = await model.generate(analysis, imageDataUris, sysPrompt, usrPrompt);
           const duration = Date.now() - start;
 
-          // Save HTML
-          const outputDir = path.join(process.cwd(), 'public', 'outputs', runId);
-          await mkdir(outputDir, { recursive: true });
-          const filename = `${analysisModelId}-${codegenModelId}.html`;
+          // Save HTML with imagegen model in filename
+          const filename = `${analysisModelId}-${codegenModelId}-${imagegenModelId}.html`;
           await writeFile(path.join(outputDir, filename), html);
+
+          // Save the codegen prompts used
+          await writeFile(
+            path.join(outputDir, `codegen-prompt-${codegenModelId}.txt`),
+            `=== SYSTEM PROMPT ===\n${sysPrompt}\n\n=== USER PROMPT (template) ===\n${usrPrompt}`
+          );
 
           send({
             type: 'generation_complete',

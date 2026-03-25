@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import JSZip from 'jszip';
 import UploadZone from '@/components/UploadZone';
 import PipelineConfig from '@/components/PipelineConfig';
 import PromptEditor from '@/components/PromptEditor';
@@ -588,6 +589,31 @@ export default function Home() {
                   className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md text-sm font-medium transition-colors"
                 >
                   Open in New Tab
+                </button>
+                <button
+                  onClick={async () => {
+                    const zip = new JSZip();
+                    // Add original image
+                    if (imageFile) {
+                      zip.file(`original-${imageFile.name}`, imageFile);
+                    }
+                    // Add all generated HTML files
+                    for (const [key, gen] of Object.entries(generations)) {
+                      if (gen.status === 'complete' && gen.html) {
+                        zip.file(`${key}.html`, gen.html);
+                      }
+                    }
+                    const blob = await zip.generateAsync({ type: 'blob' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `adgen-${runId}.zip`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-md text-sm font-medium transition-colors"
+                >
+                  Download All as ZIP
                 </button>
               </div>
             )}
